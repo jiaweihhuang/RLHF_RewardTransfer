@@ -18,13 +18,13 @@ from trl import DPOTrainer
 import torch.distributed as dist
 
 
-class DPO(DPOTrainer):
+class IPO(DPOTrainer):
     def __init__(
         self,
         model: Union[PreTrainedModel, nn.Module] = None,
         ref_model: Optional[Union[PreTrainedModel, nn.Module]] = None,
         beta: float = 0.1,
-        loss_type: Literal["sigmoid", "hinge", "cross_entropy", "kl", "rev_kl", "raft"] = "rev_kl",
+        loss_type: Literal["sigmoid", "hinge", "cross_entropy", "kl", "rev_kl", "raft"] = "ipo",
         args: TrainingArguments = None,
         data_collator: Optional[DataCollator] = None,
         label_pad_token_id: int = -100,
@@ -85,7 +85,7 @@ class DPO(DPOTrainer):
         self.use_dpo_data_collator = True
         self.len_penalty = len_penalty
 
-    def dpo_loss(
+    def ipo_loss(
         self,
         policy_chosen_logps: torch.FloatTensor,
         policy_rejected_logps: torch.FloatTensor,
@@ -116,44 +116,10 @@ class DPO(DPOTrainer):
         if reference_free:
             ref_logratios = 0
 
-        if self.loss_type == "sigmoid":
-            logits = pi_logratios - ref_logratios
-            losses = -F.logsigmoid(self.beta * logits)
-        elif self.loss_type == "hinge":
-            logits = pi_logratios - ref_logratios
-            losses = torch.relu(1 - self.beta * logits)
-        elif self.loss_type == "cross_entropy":
-            logits = policy_chosen_logps - reference_chosen_logps
-            losses = -F.logsigmoid(self.beta * logits)
-        elif self.loss_type == "raft":
-            losses = -policy_chosen_logps  # F.logsigmoid(self.beta * logits)
-        elif self.loss_type == "ipo":
+        if self.loss_type == "ipo":
             logits = pi_logratios - ref_logratios
             # eqn (17) of the paper where beta is the regularization parameter for the IPO loss, denoted by tau in the paper.
             losses = (logits - 1 / (2 * self.beta)) ** 2
-        elif self.loss_type == "kl":
-            logits = pi_logratios - ref_logratios
-            p = F.sigmoid(self.beta * logits)
-            p = torch.minimum(p, torch.ones_like(p) * 0.999)
-            p_gt = torch.exp(margin) / (1 + torch.exp(margin) + 1e-3)
-            losses = p * (torch.log(p) - torch.log(p_gt)) + (1 - p) * (torch.log(1 - p) - torch.log(1 - p_gt))
-        elif self.loss_type == "tv":
-            logits = pi_logratios - ref_logratios
-            p = F.sigmoid(self.beta * logits)
-            p_gt = torch.exp(margin) / (1 + torch.exp(margin))
-            losses = torch.abs(p - p_gt)
-        elif self.loss_type == "hellinger":
-            logits = pi_logratios - ref_logratios
-            p = F.sigmoid(self.beta * logits)
-            p = torch.minimum(p, torch.ones_like(p) * 0.999)
-            p_gt = torch.exp(margin) / (1 + torch.exp(margin))
-            losses = 0.5 * ((p**0.5 - p_gt**0.5) ** 2 + ((1 - p) ** 0.5 - (1 - p_gt) ** 0.5) ** 2)
-        elif self.loss_type == "rev_kl":
-            logits = pi_logratios - ref_logratios
-            logp = F.logsigmoid(self.beta * logits)
-            logp_neg = F.logsigmoid(-self.beta * logits)
-            p_gt = F.sigmoid(margin)
-            losses = -p_gt * (logp) - (1 - p_gt) * logp_neg
         else:
             raise ValueError(f"Unknown loss type: {self.loss_type}.")
 
@@ -260,7 +226,7 @@ class DPO(DPOTrainer):
             len_penalty = 0
 
         margin = torch.tensor(batch["margin"], dtype=policy_chosen_logps.dtype).to(self.accelerator.device)
-        losses, chosen_rewards, rejected_rewards = self.dpo_loss(
+        losses, chosen_rewards, rejected_rewards = self.ipo_loss(
             policy_chosen_logps,
             policy_rejected_logps,
             reference_chosen_logps,

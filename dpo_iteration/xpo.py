@@ -18,11 +18,12 @@ from trl import DPOTrainer
 import torch.distributed as dist
 
 
-class DPO(DPOTrainer):
+class XPO(DPOTrainer):
     def __init__(
         self,
         model: Union[PreTrainedModel, nn.Module] = None,
         ref_model: Optional[Union[PreTrainedModel, nn.Module]] = None,
+        alpha: float = None,
         beta: float = 0.1,
         loss_type: Literal["sigmoid", "hinge", "cross_entropy", "kl", "rev_kl", "raft"] = "rev_kl",
         args: TrainingArguments = None,
@@ -79,13 +80,13 @@ class DPO(DPOTrainer):
             disable_dropout=disable_dropout,
             generate_during_eval=generate_during_eval,
             compute_metrics=compute_metrics,
-            # model_init_kwargs={},
-            # ref_model_init_kwargs={},
         )
         self.use_dpo_data_collator = True
         self.len_penalty = len_penalty
+        assert alpha is not None
+        self.alpha = alpha
 
-    def dpo_loss(
+    def xpo_loss(
         self,
         policy_chosen_logps: torch.FloatTensor,
         policy_rejected_logps: torch.FloatTensor,
@@ -159,6 +160,11 @@ class DPO(DPOTrainer):
 
         chosen_rewards = self.beta * (policy_chosen_logps - reference_chosen_logps).detach()
         rejected_rewards = self.beta * (policy_rejected_logps - reference_rejected_logps).detach()
+
+        '''
+        Additional loss term in XPO
+        '''
+        losses = losses.mean() - self.alpha * (policy_chosen_logps.mean() + policy_rejected_logps.mean()) / 2
 
         return losses, chosen_rewards, rejected_rewards
 
@@ -260,7 +266,7 @@ class DPO(DPOTrainer):
             len_penalty = 0
 
         margin = torch.tensor(batch["margin"], dtype=policy_chosen_logps.dtype).to(self.accelerator.device)
-        losses, chosen_rewards, rejected_rewards = self.dpo_loss(
+        losses, chosen_rewards, rejected_rewards = self.xpo_loss(
             policy_chosen_logps,
             policy_rejected_logps,
             reference_chosen_logps,

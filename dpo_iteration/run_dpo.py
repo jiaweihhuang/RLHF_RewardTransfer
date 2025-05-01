@@ -6,7 +6,9 @@ import numpy as np
 import torch
 import random
 from datasets import Dataset, load_dataset
-from dpo import PreferenceTrainer
+from dpo import DPO
+from xpo import XPO
+from ipo import IPO
 from transformers import (
     HfArgumentParser,
     TrainingArguments,
@@ -380,7 +382,7 @@ if __name__ == "__main__":
 
     # 5. initialize the DPO trainer
     if script_args.algorithm == 'DPO':
-        trainer = PreferenceTrainer(
+        trainer = DPO(
             model,
             model_ref,
             args=training_args,
@@ -396,6 +398,52 @@ if __name__ == "__main__":
             len_penalty=script_args.len_penalty,
             is_encoder_decoder=script_args.is_encoder_decoder,
             disable_dropout=script_args.disable_dropout,
+        )
+    elif script_args.algorithm == 'IPO':
+        trainer = IPO(
+            model,
+            model_ref,
+            args=training_args,
+            beta=script_args.beta,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            tokenizer=tokenizer,
+            loss_type='ipo',
+            max_target_length=256,
+            max_prompt_length=script_args.max_prompt_length,
+            max_length=script_args.max_length,
+            mask_prompt=script_args.mask_prompt,
+            len_penalty=script_args.len_penalty,
+            is_encoder_decoder=script_args.is_encoder_decoder,
+            disable_dropout=script_args.disable_dropout,
+        )
+    elif script_args.algorithm == 'XPO':
+        # following (XPO, Xie et al.) to setup the learning rate and iterative training pipeline.
+        assert script_args.iteration > 0
+        if script_args.iteration == 1:
+            alpha = script_args.alpha
+        elif script_args.iteration == 2:
+            alpha = script_args.alpha / 2
+        elif script_args.iteration == 3:
+            alpha = 0
+        else:
+            alpha = 0
+        trainer = XPO(
+            model,
+            model_ref,
+            alpha=script_args.alpha,
+            args=training_args,
+            beta=script_args.beta,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            tokenizer=tokenizer,
+            loss_type=script_args.loss_type,
+            max_target_length=256,
+            max_prompt_length=script_args.max_prompt_length,
+            max_length=script_args.max_length,
+            mask_prompt=script_args.mask_prompt,
+            len_penalty=script_args.len_penalty,
+            is_encoder_decoder=script_args.is_encoder_decoder,
         )
     else:
         raise NotImplementedError
