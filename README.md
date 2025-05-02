@@ -1,4 +1,5 @@
-# Instructions for Running the Code
+# Empirical TPO (Transfer Policy Optimization)
+## Instructions for Running the Code
 
 ```bash
 # setup conda environments
@@ -11,19 +12,21 @@ conda env create -f rlhf.yaml
 ################
 
 # standard online learning without transfer learning
+# by setting algorithm="DPO"/"IPO"/"XPO", this baseline recovers iterative-DPO, iterative-IPO, empirical XPO.
 bash ./run/run_T5Small_NoTransfer_K8_TS10K_Epoch3.sh
 
-# our main transfer learning algorithm
+# our transfer learning algorithm
+# by setting algorithm="DPO"/"IPO"/"XPO", it implements empirical TPO with DPO/IPO/XPO as policy optimization oracles.
 bash ./run/run_T5Small_Transfer_K8_N32_Rp4_TS10K_Epoch3.sh
 
-# purely exploit ROUGE-LSum reward model (the one with the lowest-quality)
+# purely exploit ROUGE-LSum source reward model (the source reward with the lowest-quality)
 bash ./run/run_T5Small_Transfer_K8_N32_Rp4_TS10K_Epoch3_PE_ROUGE.sh
 
-# purely exploit T5-Large reward model (the one with the highest-quality)
+# purely exploit T5-Large source reward model (the source reward with the highest-quality)
 bash ./run/run_T5Small_Transfer_K8_N32_Rp4_TS10K_Epoch3_PE_T5Large.sh
 ```
 
-# Citation
+## Citation
 If you find the content of this repo useful, please consider citing:
 ```bibtex
 @misc{huang2025rlhfefficientimperfectreward,
@@ -38,5 +41,5 @@ If you find the content of this repo useful, please consider citing:
 ```
 
 
-# Acknowledgements
+## Acknowledgements
 The code is based on RLHFlow/Online-RLHF repo. Their original code can be found in [https://github.com/RLHFlow/Online-RLHF](https://github.com/RLHFlow/Online-RLHF).
