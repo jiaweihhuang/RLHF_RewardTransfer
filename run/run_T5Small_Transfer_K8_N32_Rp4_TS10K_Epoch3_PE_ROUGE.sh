@@ -5,6 +5,7 @@ eval "$(conda shell.bash hook)"
 
 # Base paths and settings
 initial_model="google-t5/t5-small"
+algorithm="DPO"
 set -e
 
 # Function to run a set of operations for a model iteration
@@ -40,7 +41,7 @@ run_iteration() {
     if [ ! -d $output_model_path ]; then
         echo 'start to train'
         
-        CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch --main_process_port 29505 --config_file ./configs/zero2_4GPU.yaml dpo_iteration/run_dpo.py --run_name $output_model_path --output_dir $output_model_path --tokenizer $pretrained_model_path --model_name_or_path $pretrained_model_path --ref_model $pretrained_model_path --learning_rate 5e-5 --max_steps 1200 --choose_type max_min --train_dir $reward_label_output --eval_dir $reward_label_output --loss_type sigmoid --lr_scheduler_type cosine --use_deepspeed False --is_encoder_decoder True --algorithm DPO --total_train_batch_size 64 --train_data_size 10000 --dtype bfloat16 --seed $[$seed + 123456] --K 8 --num_train_epochs 3
+        CUDA_VISIBLE_DEVICES=0,1,2,3 accelerate launch --main_process_port 29505 --config_file ./configs/zero2_4GPU.yaml train_iteration/run_training.py --run_name $output_model_path --output_dir $output_model_path --tokenizer $pretrained_model_path --model_name_or_path $pretrained_model_path --ref_model $pretrained_model_path --learning_rate 5e-5 --max_steps 1200 --choose_type max_min --train_dir $reward_label_output --eval_dir $reward_label_output --loss_type sigmoid --lr_scheduler_type cosine --use_deepspeed False --is_encoder_decoder True --algorithm $algorithm --total_train_batch_size 64 --train_data_size 10000 --dtype bfloat16 --seed $[$seed + 123456] --K 8 --num_train_epochs 3 --iteration $iteration
     else
         echo 'detech trained model directory, will skip this step'
     fi
@@ -62,7 +63,7 @@ do
         json_input="EdinburghNLP/xsum"
         json_output="${base_path}/${iteration_name}.json"
         reward_label_output="${base_path}/${iteration_name}_reward.json"
-        output_model_path="${base_path}/${iteration_name}_model_DPO"
+        output_model_path="${base_path}/${iteration_name}_model_{$algorithm}"
         
         # Determine the model path: first iteration uses the initial model, subsequent iterations use the previous iteration's model
         if [ $i -eq 1 ]; then
@@ -72,7 +73,7 @@ do
         else
             var=`expr $i - 1`
             previous_iteration="Iter${var}"
-            pretrained_model_path="${base_path}/${previous_iteration}_model_DPO"
+            pretrained_model_path="${base_path}/${previous_iteration}_model_{$algorithm}"
             
             prev_win_rate_output_dir="${base_path}/${previous_iteration}_win_rate.json"
             win_rate_output_dir="${base_path}/${iteration_name}_win_rate.json"

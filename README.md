@@ -5,6 +5,11 @@
 conda env create -f vllm.yaml
 conda env create -f rlhf.yaml
 
+################
+# By default, the policy optimization oracle is chosen as DPO.
+# If you want to test IPO and XPO as oracles, please change `algorithm="DPO"` in each bash file to `algorithm="IPO"` or `algorithm="XPO"`.
+################
+
 # standard online learning without transfer learning
 bash ./run/run_T5Small_NoTransfer_K8_TS10K_Epoch3.sh
 
